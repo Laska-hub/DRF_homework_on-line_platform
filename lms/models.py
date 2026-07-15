@@ -11,11 +11,13 @@ class Course(models.Model):
     )
 
     title = models.CharField(max_length=255)
+
     preview = models.ImageField(
         upload_to="course_previews/",
         blank=True,
         null=True
     )
+
     description = models.TextField(
         blank=True,
         null=True
@@ -60,3 +62,23 @@ class Lesson(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Subscription(models.Model):
+    user = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="subscriptions"
+    )
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="subscriptions"
+    )
+
+    class Meta:
+        unique_together = ("user", "course")
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.course.title}"

@@ -9,16 +9,18 @@ Backend часть LMS (Learning Management System), разработанная 
 - пользователями
 - курсами
 - уроками
-- платежами
+- подписками на курсы
 
 Каждый курс содержит несколько уроков.
 
 В проекте реализованы:
+
 - регистрация пользователей
 - JWT-аутентификация
 - разграничение прав доступа
 - роли пользователей (обычный пользователь и модератор)
 - владельцы курсов и уроков
+- подписка пользователей на курсы
 
 
 ## Технологии
@@ -26,15 +28,18 @@ Backend часть LMS (Learning Management System), разработанная 
 - Python 3.13+
 - Django 6
 - Django REST Framework
-- djangorestframework-simplejwt (JWT authentication)
+- djangorestframework-simplejwt
 - SQLite
 - Pillow
 - Poetry
+- pytest
+- pytest-django
+- coverage
 
 
-## Установка и запуск проекта
+# Установка и запуск проекта
 
-### 1. Клонировать репозиторий
+## 1. Клонировать репозиторий
 
 ```bash
 git clone git@github.com:Laska-hub/DRF_homework_on-line_platform.git
@@ -46,11 +51,16 @@ poetry install
 Если проект используется только как менеджер зависимостей:
 
 poetry install --no-root
-3. Активировать окружение
+3. Активировать виртуальное окружение
 poetry shell
 4. Выполнить миграции
 python manage.py migrate
-5. Запустить сервер
+5. Создать группу модераторов
+
+Загрузить фикстуру:
+
+python manage.py loaddata users/fixtures/groups.json
+6. Запустить сервер
 python manage.py runserver
 Структура проекта
 users
@@ -78,6 +88,9 @@ lms
 Содержит сущности:
 
 Course
+Lesson
+Subscription
+Course
 
 Поля:
 
@@ -99,6 +112,18 @@ video_url
 Связь:
 
 Course 1 ---- N Lesson
+Subscription
+
+Подписка пользователя на курс.
+
+Поля:
+
+user
+course
+
+Связь:
+
+User 1 ---- N Subscription N ---- 1 Course
 Аутентификация
 
 В проекте используется JWT-аутентификация через SimpleJWT.
@@ -128,13 +153,10 @@ POST:
 
 /api/token/refresh/
 
-Для доступа к защищенным endpoint необходимо передавать:
+Для доступа к защищённым endpoint необходимо передавать:
 
 Authorization: Bearer <access_token>
 Права доступа
-
-В проекте реализованы DRF permissions.
-
 Обычный пользователь
 
 Может:
@@ -144,6 +166,7 @@ Authorization: Bearer <access_token>
 просматривать свои объекты
 редактировать свои объекты
 удалять свои объекты
+подписываться на курсы
 
 Не может:
 
@@ -167,10 +190,6 @@ moderators
 создавать уроки
 удалять курсы
 удалять уроки
-
-Группа модераторов создается через фикстуру:
-
-python manage.py loaddata users/fixtures/groups.json
 API Endpoints
 Users
 
@@ -235,21 +254,38 @@ PUT /api/lessons/{id}/
 Удаление урока:
 
 DELETE /api/lessons/{id}/
-Payments
+Subscription
 
-Платежи пользователей:
+Добавление или удаление подписки на курс:
 
-GET /api/payments/
-POST /api/payments/
-GET /api/payments/{id}/
-PUT /api/payments/{id}/
-DELETE /api/payments/{id}/
+POST /api/subscription/
+
+Пример запроса:
+
+{
+    "course_id": 1
+}
+
+Ответ при добавлении:
+
+{
+    "message": "Подписка добавлена"
+}
+
+Ответ при удалении:
+
+{
+    "message": "Подписка удалена"
+}
 Примеры запросов
 Создание курса
 
 POST:
 
 /api/courses/
+
+Запрос:
+
 {
     "title": "Django REST Framework",
     "description": "Course about DRF",
@@ -260,6 +296,9 @@ POST:
 POST:
 
 /api/lessons/
+
+Запрос:
+
 {
     "title": "JWT Authentication",
     "description": "Working with tokens",
@@ -270,7 +309,8 @@ POST:
 
 В проекте реализовано:
 
-кастомная модель пользователя на основе AbstractBaseUser
+кастомная модель пользователя на основе AbstractUser
+авторизация пользователя по email
 JWT authentication через SimpleJWT
 ModelViewSet для Course и Lesson
 DRF permissions
@@ -279,7 +319,32 @@ DRF permissions
 автоматическое заполнение owner через perform_create()
 фикстура группы moderators
 ForeignKey связь Course → Lesson
+подписка пользователя на курс
+пагинация курсов и уроков
 API возвращает JSON
+Тестирование
+
+В проекте реализованы автоматические тесты:
+
+users
+courses
+lessons
+permissions
+subscriptions
+
+Запуск всех тестов:
+
+poetry run pytest
+
+Проверка покрытия:
+
+poetry run coverage run -m pytest
+
+poetry run coverage report
+
+Текущее покрытие проекта:
+
+95%
 Проверка проекта
 
 Проверка Django:
@@ -290,6 +355,11 @@ python manage.py check
 
 python manage.py makemigrations
 
-Автор: Olesia Laskovets
+Применение миграций:
+
+python manage.py migrate
+Автор
+
+Olesia Laskovets
 
 DRF homework project — LMS platform
