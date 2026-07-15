@@ -2,126 +2,364 @@
 
 ## Описание проекта
 
-Проект представляет собой backend часть LMS (Learning Management System), разработанную на Django и 
-Django REST Framework.
+Backend часть LMS (Learning Management System), разработанная на Django и Django REST Framework.
 
-Система позволяет управлять:
+Проект позволяет управлять:
+
 - пользователями
 - курсами
 - уроками
+- подписками на курсы
 
-Каждый курс может содержать множество уроков.
+Каждый курс содержит несколько уроков.
+
+В проекте реализованы:
+
+- регистрация пользователей
+- JWT-аутентификация
+- разграничение прав доступа
+- роли пользователей (обычный пользователь и модератор)
+- владельцы курсов и уроков
+- подписка пользователей на курсы
 
 
 ## Технологии
 
-- Python 3.12+
+- Python 3.13+
 - Django 6
 - Django REST Framework
-- SQLite (по умолчанию)
-- Pillow (для работы с изображениями)
+- djangorestframework-simplejwt
+- SQLite
+- Pillow
+- Poetry
+- pytest
+- pytest-django
+- coverage
 
 
-## Установка и запуск проекта
+# Установка и запуск проекта
 
-### 1. Клонировать репозиторий
+## 1. Клонировать репозиторий
+
 ```bash
 git clone git@github.com:Laska-hub/DRF_homework_on-line_platform.git
-cd DRF_homework_on-line_platform
 
-2. Установить зависимости (Poetry)
+cd DRF_homework_on-line_platform
+2. Установить зависимости
 poetry install
 
-3. Активировать окружение
-poetry shell
+Если проект используется только как менеджер зависимостей:
 
+poetry install --no-root
+3. Активировать виртуальное окружение
+poetry shell
 4. Выполнить миграции
 python manage.py migrate
+5. Создать группу модераторов
 
-5. Запустить сервер
+Загрузить фикстуру:
+
+python manage.py loaddata users/fixtures/groups.json
+6. Запустить сервер
 python manage.py runserver
-
-Основные приложения
+Структура проекта
 users
+
+Приложение пользователей.
+
+Реализовано:
 
 кастомная модель пользователя
 авторизация по email
-поля:
+регистрация пользователей
+JWT authentication
+управление профилем пользователя
+
+Поля пользователя:
+
 email (USERNAME_FIELD)
 phone
 city
 avatar
-
 lms
-Содержит основные сущности платформы:
+
+Основное приложение платформы.
+
+Содержит сущности:
 
 Course
-
-title
-description
-preview (image)
-
 Lesson
+Subscription
+Course
+
+Поля:
+
+owner
 title
 description
-preview (image)
+preview
+Lesson
+
+Поля:
+
+owner
+course (ForeignKey)
+title
+description
+preview
 video_url
-связь с Course (ForeignKey)
 
-API endpoints
+Связь:
 
-Courses
+Course 1 ---- N Lesson
+Subscription
 
-GET /api/courses/
-POST /api/courses/
-GET /api/courses/{id}/
-PUT /api/courses/{id}/
-DELETE /api/courses/{id}/
+Подписка пользователя на курс.
 
-Lessons
+Поля:
 
-GET /api/lessons/
-POST /api/lessons/
-GET /api/lessons/{id}/
-PUT /api/lessons/{id}/
-DELETE /api/lessons/{id}/
+user
+course
 
+Связь:
+
+User 1 ---- N Subscription N ---- 1 Course
+Аутентификация
+
+В проекте используется JWT-аутентификация через SimpleJWT.
+
+Получение токена
+
+POST:
+
+/api/token/
+
+Пример запроса:
+
+{
+    "email": "test@test.com",
+    "password": "12345"
+}
+
+Ответ:
+
+{
+    "refresh": "token",
+    "access": "token"
+}
+Обновление токена
+
+POST:
+
+/api/token/refresh/
+
+Для доступа к защищённым endpoint необходимо передавать:
+
+Authorization: Bearer <access_token>
+Права доступа
+Обычный пользователь
+
+Может:
+
+создавать свои курсы
+создавать свои уроки
+просматривать свои объекты
+редактировать свои объекты
+удалять свои объекты
+подписываться на курсы
+
+Не может:
+
+работать с чужими объектами
+Модератор
+
+Пользователь группы:
+
+moderators
+
+Может:
+
+просматривать все курсы
+просматривать все уроки
+редактировать любые курсы
+редактировать любые уроки
+
+Не может:
+
+создавать курсы
+создавать уроки
+удалять курсы
+удалять уроки
+API Endpoints
 Users
 
+Получение списка пользователей:
+
 GET /api/users/
+
+Создание пользователя:
+
 POST /api/users/
+
+Получение пользователя:
+
 GET /api/users/{id}/
+
+Обновление пользователя:
+
 PUT /api/users/{id}/
+
+Удаление пользователя:
+
 DELETE /api/users/{id}/
+Courses
 
-Примеры запросов
+Получение списка курсов:
 
-Создание курса
+GET /api/courses/
+
+Создание курса:
 
 POST /api/courses/
+
+Получение курса:
+
+GET /api/courses/{id}/
+
+Обновление курса:
+
+PUT /api/courses/{id}/
+
+Удаление курса:
+
+DELETE /api/courses/{id}/
+Lessons
+
+Получение списка уроков:
+
+GET /api/lessons/
+
+Создание урока:
+
+POST /api/lessons/
+
+Получение урока:
+
+GET /api/lessons/{id}/
+
+Обновление урока:
+
+PUT /api/lessons/{id}/
+
+Удаление урока:
+
+DELETE /api/lessons/{id}/
+Subscription
+
+Добавление или удаление подписки на курс:
+
+POST /api/subscription/
+
+Пример запроса:
+
 {
-  "title": "Django",
-  "description": "Django course",
-  "preview": null
+    "course_id": 1
+}
+
+Ответ при добавлении:
+
+{
+    "message": "Подписка добавлена"
+}
+
+Ответ при удалении:
+
+{
+    "message": "Подписка удалена"
+}
+Примеры запросов
+Создание курса
+
+POST:
+
+/api/courses/
+
+Запрос:
+
+{
+    "title": "Django REST Framework",
+    "description": "Course about DRF",
+    "preview": null
 }
 Создание урока
 
-POST /api/lessons/
+POST:
+
+/api/lessons/
+
+Запрос:
+
 {
-  "title": "Lesson 1",
-  "description": "Intro",
-  "video_url": "https://youtube.com",
-  "course": 1
+    "title": "JWT Authentication",
+    "description": "Working with tokens",
+    "video_url": "https://youtube.com",
+    "course": 1
 }
-Особенности реализации: 
+Особенности реализации
 
-используется ModelViewSet для Course
-GenericAPIView для Lesson
-кастомная модель пользователя (AbstractBaseUser)
-связи Course → Lesson (One-to-Many)
+В проекте реализовано:
+
+кастомная модель пользователя на основе AbstractUser
+авторизация пользователя по email
+JWT authentication через SimpleJWT
+ModelViewSet для Course и Lesson
+DRF permissions
+проверка владельца объектов
+проверка принадлежности пользователя к группе moderators
+автоматическое заполнение owner через perform_create()
+фикстура группы moderators
+ForeignKey связь Course → Lesson
+подписка пользователя на курс
+пагинация курсов и уроков
 API возвращает JSON
+Тестирование
 
-- Автор
+В проекте реализованы автоматические тесты:
+
+users
+courses
+lessons
+permissions
+subscriptions
+
+Запуск всех тестов:
+
+poetry run pytest
+
+Проверка покрытия:
+
+poetry run coverage run -m pytest
+
+poetry run coverage report
+
+Текущее покрытие проекта:
+
+95%
+Проверка проекта
+
+Проверка Django:
+
+python manage.py check
+
+Проверка миграций:
+
+python manage.py makemigrations
+
+Применение миграций:
+
+python manage.py migrate
+Автор
 
 Olesia Laskovets
+
 DRF homework project — LMS platform
