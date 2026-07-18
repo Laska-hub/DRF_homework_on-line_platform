@@ -21,6 +21,7 @@ class CourseTestCase(APITestCase):
         self.course = Course.objects.create(
             title="Test course",
             description="Description",
+            price=1000,
             owner=self.owner
         )
 
@@ -33,7 +34,8 @@ class CourseTestCase(APITestCase):
 
         data = {
             "title": "New course",
-            "description": "New description"
+            "description": "New description",
+            "price": "1500.00"
         }
 
         response = self.client.post(

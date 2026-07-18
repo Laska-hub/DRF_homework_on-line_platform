@@ -19,13 +19,12 @@ class LessonTestCase(APITestCase):
             password="testpass123"
         )
 
-
         self.course = Course.objects.create(
             title="Test course",
             description="Description",
+            price=1000,
             owner=self.owner
         )
-
 
         self.lesson = Lesson.objects.create(
             title="Test lesson",
@@ -35,11 +34,9 @@ class LessonTestCase(APITestCase):
             course=self.course
         )
 
-
         self.client.force_authenticate(
             user=self.owner
         )
-
 
 
     def test_create_lesson(self):
@@ -51,24 +48,20 @@ class LessonTestCase(APITestCase):
             "course": self.course.id
         }
 
-
         response = self.client.post(
             "/api/lessons/",
             data
         )
-
 
         self.assertEqual(
             response.status_code,
             status.HTTP_201_CREATED
         )
 
-
         self.assertEqual(
             response.data["owner"],
             self.owner.id
         )
-
 
 
     def test_get_lessons(self):
@@ -77,12 +70,10 @@ class LessonTestCase(APITestCase):
             "/api/lessons/"
         )
 
-
         self.assertEqual(
             response.status_code,
             status.HTTP_200_OK
         )
-
 
 
     def test_update_lesson_owner(self):
@@ -94,12 +85,10 @@ class LessonTestCase(APITestCase):
             }
         )
 
-
         self.assertEqual(
             response.status_code,
             status.HTTP_200_OK
         )
-
 
 
     def test_delete_lesson_owner(self):
@@ -107,7 +96,6 @@ class LessonTestCase(APITestCase):
         response = self.client.delete(
             f"/api/lessons/{self.lesson.id}/"
         )
-
 
         self.assertEqual(
             response.status_code,
