@@ -1,26 +1,363 @@
-from rest_framework.viewsets import ModelViewSet
-from .models import Course
-from .serializers import CourseSerializer
-from .models import Lesson
-from .serializers import LessonSerializer
+from django.shortcuts import get_object_or_404
 
-class CourseViewSet(ModelViewSet):
-    queryset = Course.objects.all()
-    serializer_class = CourseSerializer
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiResponse,
+    inline_serializer,
+)
 
+from rest_framework import serializers
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.viewsets import (
+    ModelViewSet,
+    ReadOnlyModelViewSet,
+)
 
-from rest_framework.generics import (
-    ListCreateAPIView,
-    RetrieveUpdateDestroyAPIView
+from .models import (
+    Course,
+    Lesson,
+    Subscription,
+    Payment,
+)
+
+from .paginators import CourseLessonPagination
+from .permissions import IsModerator, IsOwner
+
+from .serializers import (
+    CourseSerializer,
+    LessonSerializer,
+    PaymentSerializer,
+)
+
+from .services import (
+    create_stripe_product,
+    create_stripe_price,
+    create_checkout_session,
 )
 
 
+@extend_schema(tags=["Courses"])
+class CourseViewSet(ModelViewSet):
 
-class LessonListCreateAPIView(ListCreateAPIView):
-    queryset = Lesson.objects.all()
+    serializer_class = CourseSerializer
+    pagination_class = CourseLessonPagination
+
+    queryset = Course.objects.all()
+
+    def get_queryset(self):
+
+        user = self.request.user
+
+        if user.groups.filter(
+            name="moderators"
+        ).exists():
+
+            return Course.objects.all().order_by(
+                "id"
+            )
+
+        return Course.objects.filter(
+            owner=user
+        ).order_by(
+            "id"
+        )
+
+
+    def get_permissions(self):
+
+        if self.action in [
+            "update",
+            "partial_update"
+        ]:
+
+            permission_classes = [
+                IsAuthenticated,
+                IsOwner | IsModerator
+            ]
+
+        elif self.action == "destroy":
+
+            permission_classes = [
+                IsAuthenticated,
+                IsOwner
+            ]
+
+        elif self.action == "create":
+
+            permission_classes = [
+                IsAuthenticated,
+                ~IsModerator
+            ]
+
+        else:
+
+            permission_classes = [
+                IsAuthenticated
+            ]
+
+
+        return [
+            permission()
+            for permission in permission_classes
+        ]
+
+
+    def perform_create(self, serializer):
+
+        serializer.save(
+            owner=self.request.user
+        )
+
+
+
+@extend_schema(tags=["Lessons"])
+class LessonViewSet(ModelViewSet):
+
     serializer_class = LessonSerializer
+    pagination_class = CourseLessonPagination
 
-
-class LessonDetailAPIView(RetrieveUpdateDestroyAPIView):
     queryset = Lesson.objects.all()
-    serializer_class = LessonSerializer
+
+
+    def get_queryset(self):
+
+        user = self.request.user
+
+        if user.groups.filter(
+            name="moderators"
+        ).exists():
+
+            return Lesson.objects.all().order_by(
+                "id"
+            )
+
+        return Lesson.objects.filter(
+            owner=user
+        ).order_by(
+            "id"
+        )
+
+
+    def get_permissions(self):
+
+        if self.action in [
+            "update",
+            "partial_update"
+        ]:
+
+            permission_classes = [
+                IsAuthenticated,
+                IsOwner | IsModerator
+            ]
+
+        elif self.action == "destroy":
+
+            permission_classes = [
+                IsAuthenticated,
+                IsOwner
+            ]
+
+        elif self.action == "create":
+
+            permission_classes = [
+                IsAuthenticated,
+                ~IsModerator
+            ]
+
+        else:
+
+            permission_classes = [
+                IsAuthenticated
+            ]
+
+
+        return [
+            permission()
+            for permission in permission_classes
+        ]
+
+
+    def perform_create(self, serializer):
+
+        serializer.save(
+            owner=self.request.user
+        )
+
+
+
+@extend_schema(
+    tags=["Subscriptions"],
+    summary="Подписка на курс",
+    description=(
+        "Добавляет или удаляет подписку "
+        "пользователя на курс."
+    ),
+    request=inline_serializer(
+        name="SubscriptionRequest",
+        fields={
+            "course_id": serializers.IntegerField()
+        },
+    ),
+    responses={
+        200: OpenApiResponse(
+            response=inline_serializer(
+                name="SubscriptionResponse",
+                fields={
+                    "message": serializers.CharField()
+                },
+            )
+        )
+    },
+)
+class SubscriptionAPIView(APIView):
+
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+
+    def post(self, request):
+
+        course_id = request.data.get(
+            "course_id"
+        )
+
+        course = get_object_or_404(
+            Course,
+            id=course_id
+        )
+
+
+        subscription = Subscription.objects.filter(
+            user=request.user,
+            course=course
+        )
+
+
+        if subscription.exists():
+
+            subscription.delete()
+
+            message = "Подписка удалена"
+
+        else:
+
+            Subscription.objects.create(
+                user=request.user,
+                course=course
+            )
+
+            message = "Подписка добавлена"
+
+
+        return Response(
+            {
+                "message": message
+            }
+        )
+
+
+
+@extend_schema(
+    tags=["Payments"],
+    summary="Создание платежа Stripe",
+    request=PaymentSerializer,
+    responses={
+        201: PaymentSerializer
+    }
+)
+class PaymentCreateAPIView(APIView):
+
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+
+    def post(self, request):
+
+        course_id = request.data.get(
+            "paid_course"
+        )
+
+
+        course = get_object_or_404(
+            Course,
+            id=course_id
+        )
+
+
+        product = create_stripe_product(
+            course.title
+        )
+
+
+        price = create_stripe_price(
+            product.id,
+            course.price
+        )
+
+
+        session = create_checkout_session(
+            price.id
+        )
+
+
+        payment = Payment.objects.create(
+
+            user=request.user,
+
+            paid_course=course,
+
+            amount=course.price,
+
+            payment_method="card",
+
+            stripe_product_id=product.id,
+
+            stripe_price_id=price.id,
+
+            stripe_session_id=session.id,
+
+            payment_link=session.url,
+
+            status="pending",
+        )
+
+
+        serializer = PaymentSerializer(
+            payment
+        )
+
+
+        return Response(
+            serializer.data,
+            status=201
+        )
+
+
+
+@extend_schema(
+    tags=["Payments"]
+)
+class PaymentViewSet(ReadOnlyModelViewSet):
+
+    serializer_class = PaymentSerializer
+
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    pagination_class = CourseLessonPagination
+
+    queryset = Payment.objects.all()
+
+
+    def get_queryset(self):
+
+        return Payment.objects.filter(
+            user=self.request.user
+        ).order_by(
+            "-payment_date"
+        )

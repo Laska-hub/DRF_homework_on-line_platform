@@ -2,126 +2,461 @@
 
 ## Описание проекта
 
-Проект представляет собой backend часть LMS (Learning Management System), разработанную на Django и 
-Django REST Framework.
+Backend часть LMS (Learning Management System), разработанная на Django и Django REST Framework.
 
-Система позволяет управлять:
-- пользователями
-- курсами
-- уроками
+Проект представляет собой онлайн-платформу для обучения, позволяющую пользователям работать с курсами, уроками, подписками и оплатой курсов.
 
-Каждый курс может содержать множество уроков.
+В проекте реализованы:
+
+- регистрация пользователей
+- JWT-аутентификация
+- управление профилем пользователя
+- роли пользователей
+- разграничение прав доступа
+- управление курсами
+- управление уроками
+- подписка на курсы
+- оплата курсов через Stripe API
+- генерация API документации
 
 
-## Технологии
+---
 
-- Python 3.12+
+# Технологии
+
+- Python 3.13+
 - Django 6
 - Django REST Framework
-- SQLite (по умолчанию)
-- Pillow (для работы с изображениями)
+- drf-spectacular
+- djangorestframework-simplejwt
+- Stripe API
+- SQLite
+- Pillow
+- Poetry
+- pytest
+- pytest-django
+- coverage
 
 
-## Установка и запуск проекта
+---
 
-### 1. Клонировать репозиторий
+# Установка и запуск проекта
+
+## 1. Клонировать репозиторий
+
 ```bash
 git clone git@github.com:Laska-hub/DRF_homework_on-line_platform.git
-cd DRF_homework_on-line_platform
 
-2. Установить зависимости (Poetry)
+cd DRF_homework_on-line_platform
+2. Установить зависимости
 poetry install
 
-3. Активировать окружение
+или:
+
+poetry install --no-root
+3. Настроить переменные окружения
+
+Создать файл .env:
+
+SECRET_KEY=your_secret_key
+
+STRIPE_SECRET_KEY=your_stripe_secret_key
+
+Stripe ключ можно получить в тестовом режиме:
+
+https://dashboard.stripe.com/test/apikeys
+
+4. Активировать окружение
 poetry shell
-
-4. Выполнить миграции
+5. Выполнить миграции
 python manage.py migrate
+6. Создать группу модераторов
 
-5. Запустить сервер
+Загрузить фикстуру:
+
+python manage.py loaddata users/fixtures/groups.json
+7. Запустить сервер
 python manage.py runserver
+Документация API
 
-Основные приложения
-users
+В проекте используется:
+
+drf-spectacular
+Swagger UI
+
+Swagger документация доступна:
+
+http://127.0.0.1:8000/api/docs/
+
+OpenAPI schema:
+
+http://127.0.0.1:8000/api/schema/
+Структура проекта
+DRF_homework_on-line_platform
+
+├── users
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── permissions.py
+│
+├── lms
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   ├── services.py
+│   ├── permissions.py
+│   ├── validators.py
+│   └── tests
+│
+└── config
+    ├── settings.py
+    └── urls.py
+Приложение users
+
+Реализовано:
 
 кастомная модель пользователя
-авторизация по email
-поля:
-email (USERNAME_FIELD)
+регистрация пользователей
+JWT authentication
+управление пользователями
+
+Модель пользователя:
+
+email
 phone
 city
 avatar
 
-lms
-Содержит основные сущности платформы:
+Email используется как:
+
+USERNAME_FIELD
+Приложение lms
+
+Основные модели:
 
 Course
-
-title
-description
-preview (image)
-
 Lesson
+Subscription
+Payment
+Course
+
+Курс содержит:
+
+Поля:
+
+owner
 title
 description
-preview (image)
+preview
+price
+
+Связь:
+
+Course 1 ---- N Lesson
+Lesson
+
+Поля:
+
+owner
+course
+title
+description
+preview
 video_url
-связь с Course (ForeignKey)
 
-API endpoints
+Для поля video_url реализована проверка:
 
-Courses
+разрешены только YouTube ссылки
+Subscription
 
-GET /api/courses/
-POST /api/courses/
-GET /api/courses/{id}/
-PUT /api/courses/{id}/
-DELETE /api/courses/{id}/
+Подписка пользователя на курс.
 
-Lessons
+Поля:
 
-GET /api/lessons/
-POST /api/lessons/
-GET /api/lessons/{id}/
-PUT /api/lessons/{id}/
-DELETE /api/lessons/{id}/
+user
+course
 
+Связь:
+
+User 1 ---- N Subscription N ---- 1 Course
+
+Добавление или удаление подписки выполняется одним запросом.
+
+Payment
+
+Оплата курса через Stripe.
+
+Поля:
+
+user
+paid_course
+amount
+payment_method
+status
+stripe_product_id
+stripe_price_id
+stripe_session_id
+payment_link
+
+Связь:
+
+User 1 ---- N Payment N ---- 1 Course
+Stripe Integration
+
+Реализован сервисный слой:
+
+lms/services.py
+
+В сервисах реализовано:
+
+Создание продукта Stripe
+
+Используется:
+
+stripe.Product.create()
+Создание цены Stripe
+
+Используется:
+
+stripe.Price.create()
+
+Цена передается в копейках:
+
+amount * 100
+Создание Checkout Session
+
+Используется:
+
+stripe.checkout.Session.create()
+
+В ответ пользователю возвращается:
+
+информация о платеже
+ссылка на оплату Stripe Checkout
+Аутентификация
+
+Используется JWT через SimpleJWT.
+
+Получение токена:
+
+POST /api/token/
+
+Пример запроса:
+
+{
+    "email": "test@test.com",
+    "password": "password"
+}
+
+Ответ:
+
+{
+    "refresh": "token",
+    "access": "token"
+}
+
+Обновление токена:
+
+POST /api/token/refresh/
+
+Для защищенных запросов:
+
+Authorization: Bearer <access_token>
+Права доступа
+Обычный пользователь
+
+Может:
+
+создавать свои курсы
+создавать свои уроки
+редактировать свои объекты
+удалять свои объекты
+просматривать свои объекты
+подписываться на курсы
+создавать платежи
+
+Не может:
+
+изменять чужие объекты
+Модератор
+
+Группа:
+
+moderators
+
+Может:
+
+видеть все курсы
+видеть все уроки
+редактировать любые курсы
+редактировать любые уроки
+
+Не может:
+
+создавать курсы
+создавать уроки
+удалять курсы
+удалять уроки
+API Endpoints
 Users
 
+Получение пользователей:
+
 GET /api/users/
+
+Создание пользователя:
+
 POST /api/users/
+
+Получение пользователя:
+
 GET /api/users/{id}/
-PUT /api/users/{id}/
-DELETE /api/users/{id}/
+Courses
 
-Примеры запросов
+Получение курсов:
 
-Создание курса
+GET /api/courses/
+
+Создание курса:
 
 POST /api/courses/
-{
-  "title": "Django",
-  "description": "Django course",
-  "preview": null
-}
-Создание урока
+
+Получение курса:
+
+GET /api/courses/{id}/
+
+Обновление:
+
+PUT /api/courses/{id}/
+
+Удаление:
+
+DELETE /api/courses/{id}/
+Lessons
+
+Получение уроков:
+
+GET /api/lessons/
+
+Создание урока:
 
 POST /api/lessons/
+
+Получение урока:
+
+GET /api/lessons/{id}/
+
+Обновление:
+
+PUT /api/lessons/{id}/
+
+Удаление:
+
+DELETE /api/lessons/{id}/
+Subscription
+
+Добавить или удалить подписку:
+
+POST /api/subscription/
+
+Запрос:
+
 {
-  "title": "Lesson 1",
-  "description": "Intro",
-  "video_url": "https://youtube.com",
-  "course": 1
+    "course_id": 1
 }
-Особенности реализации: 
 
-используется ModelViewSet для Course
-GenericAPIView для Lesson
-кастомная модель пользователя (AbstractBaseUser)
-связи Course → Lesson (One-to-Many)
-API возвращает JSON
+Ответ:
 
-- Автор
+{
+    "message": "Подписка добавлена"
+}
+
+или:
+
+{
+    "message": "Подписка удалена"
+}
+Payments
+
+Получение своих платежей:
+
+GET /api/payments/
+
+Получение платежа:
+
+GET /api/payments/{id}/
+
+Создание платежа:
+
+POST /api/payments/create/
+
+Пример:
+
+{
+    "paid_course": 1
+}
+
+Ответ содержит:
+
+id платежа
+сумму
+Stripe ID продукта
+Stripe ID цены
+Stripe Session ID
+ссылку на оплату
+Тестирование
+
+Реализованы автоматические тесты:
+
+users
+courses
+lessons
+permissions
+subscriptions
+payments
+
+Запуск:
+
+poetry run pytest
+
+Текущий результат:
+
+20 passed
+
+Проверка покрытия:
+
+poetry run coverage run -m pytest
+
+poetry run coverage report
+Проверка проекта
+
+Проверка Django:
+
+python manage.py check
+
+Создание миграций:
+
+python manage.py makemigrations
+
+Применение миграций:
+
+python manage.py migrate
+Реализованные дополнительные возможности
+кастомная модель пользователя
+JWT authentication
+DRF permissions
+роли пользователей
+группа moderators
+автоматическое заполнение owner
+пагинация
+YouTube validator
+Swagger документация
+Stripe API integration
+сохранение платежных данных
+автоматические тесты
+Автор
 
 Olesia Laskovets
-DRF homework project — LMS platform
+
+DRF Homework Project — LMS Platform
