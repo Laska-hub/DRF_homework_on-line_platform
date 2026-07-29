@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
-
+from datetime import timedelta
+from django.utils import timezone
 from drf_spectacular.utils import (
     extend_schema,
     OpenApiResponse,
@@ -36,6 +37,10 @@ from .services import (
     create_stripe_price,
     create_checkout_session,
 )
+from .tasks import send_course_update_email
+from datetime import timedelta
+
+from django.utils import timezone
 
 
 @extend_schema(tags=["Courses"])
@@ -110,6 +115,19 @@ class CourseViewSet(ModelViewSet):
             owner=self.request.user
         )
 
+    def perform_update(self, serializer):
+
+        old_updated_at = serializer.instance.updated_at
+
+        course = serializer.save()
+
+        if (
+                timezone.now() - old_updated_at
+                >= timedelta(hours=4)
+        ):
+            send_course_update_email.delay(
+                course.id
+            )
 
 
 @extend_schema(tags=["Lessons"])
@@ -185,6 +203,19 @@ class LessonViewSet(ModelViewSet):
             owner=self.request.user
         )
 
+    def perform_update(self, serializer):
+
+        lesson = serializer.save()
+
+        course = lesson.course
+
+        if (
+                timezone.now() - course.updated_at
+                >= timedelta(hours=4)
+        ):
+            send_course_update_email.delay(
+                course.id
+            )
 
 
 @extend_schema(
