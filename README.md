@@ -2,126 +2,631 @@
 
 ## Описание проекта
 
-Проект представляет собой backend часть LMS (Learning Management System), разработанную на Django и 
-Django REST Framework.
+Backend часть LMS (Learning Management System), разработанная на Django и Django REST Framework.
 
-Система позволяет управлять:
-- пользователями
-- курсами
-- уроками
+Проект представляет собой онлайн-платформу для обучения, позволяющую пользователям работать с курсами, 
+уроками, подписками и оплатой курсов.
 
-Каждый курс может содержать множество уроков.
+В проекте реализованы:
+
+* регистрация пользователей
+* JWT-аутентификация
+* управление профилем пользователя
+* роли пользователей
+* разграничение прав доступа
+* управление курсами
+* управление уроками
+* подписка на курсы
+* оплата курсов через Stripe API
+* генерация API документации
+* асинхронные задачи через Celery
+* очереди задач через Redis
+* периодические задачи через Celery Beat
 
 
-## Технологии
+# Технологии
 
-- Python 3.12+
-- Django 6
-- Django REST Framework
-- SQLite (по умолчанию)
-- Pillow (для работы с изображениями)
+* Python 3.13+
+* Django 6
+* Django REST Framework
+* drf-spectacular
+* djangorestframework-simplejwt
+* Stripe API
+* Celery
+* Redis
+* django-celery-beat
+* SQLite
+* Pillow
+* Poetry
+* pytest
+* pytest-django
+* coverage
 
+---
 
-## Установка и запуск проекта
+# Установка и запуск проекта
 
-### 1. Клонировать репозиторий
+## 1. Клонировать репозиторий
+
 ```bash
 git clone git@github.com:Laska-hub/DRF_homework_on-line_platform.git
+
 cd DRF_homework_on-line_platform
+```
 
-2. Установить зависимости (Poetry)
+## 2. Установить зависимости
+
+```bash
 poetry install
+```
 
-3. Активировать окружение
+или:
+
+```bash
+poetry install --no-root
+```
+
+## 3. Настроить переменные окружения
+
+Создать файл `.env`:
+
+```env
+SECRET_KEY=your_secret_key
+
+STRIPE_SECRET_KEY=your_stripe_secret_key
+
+REDIS_URL=redis://127.0.0.1:6379/0
+```
+
+Stripe ключ можно получить в тестовом режиме:
+
+https://dashboard.stripe.com/test/apikeys
+
+## 4. Активировать окружение
+
+```bash
 poetry shell
+```
 
-4. Выполнить миграции
+## 5. Выполнить миграции
+
+```bash
 python manage.py migrate
+```
 
-5. Запустить сервер
+## 6. Создать группу модераторов
+
+Загрузить фикстуру:
+
+```bash
+python manage.py loaddata users/fixtures/groups.json
+```
+
+## 7. Запустить сервер
+
+```bash
 python manage.py runserver
+```
 
-Основные приложения
-users
+---
 
-кастомная модель пользователя
-авторизация по email
-поля:
-email (USERNAME_FIELD)
-phone
-city
-avatar
+# Celery и фоновые задачи
 
-lms
-Содержит основные сущности платформы:
+В проекте реализована обработка фоновых задач через Celery.
 
-Course
+Используются:
 
-title
-description
-preview (image)
+* Redis как брокер сообщений
+* Celery Worker для выполнения задач
+* Celery Beat для периодических задач
+* django-celery-beat для хранения расписания
 
-Lesson
-title
-description
-preview (image)
-video_url
-связь с Course (ForeignKey)
+## Запуск Celery Worker
 
-API endpoints
+Отдельный терминал:
 
-Courses
+```bash
+poetry run celery -A config worker -l info
+```
 
-GET /api/courses/
-POST /api/courses/
-GET /api/courses/{id}/
-PUT /api/courses/{id}/
+## Запуск Celery Beat
+
+Отдельный терминал:
+
+```bash
+poetry run celery -A config beat -l info
+```
+
+---
+
+# Реализованные Celery задачи
+
+## Уведомление подписчиков курса
+
+При обновлении курса:
+
+* проверяется время последнего обновления
+* если курс не обновлялся более 4 часов
+* запускается фоновая задача отправки уведомлений
+
+Task:
+
+```python
+lms.tasks.send_course_update_email
+```
+
+Получатели берутся из подписок курса.
+
+Email backend:
+
+```python
+django.core.mail.backends.console.EmailBackend
+```
+
+В учебной версии письма выводятся в консоль.
+
+Пример результата:
+
+```
+Subject: Обновление курса
+
+Материалы курса были обновлены.
+```
+
+---
+
+## Блокировка неактивных пользователей
+
+Добавлена периодическая задача:
+
+```python
+lms.tasks.deactivate_inactive_users
+```
+
+Задача:
+
+* проверяет пользователей
+* отключает пользователей, которые долго не проявляли активность
+
+Расписание:
+
+ежедневно в 00:00
+
+Используется:
+
+```python
+django_celery_beat.schedulers.DatabaseScheduler
+```
+
+---
+
+# Документация API
+
+В проекте используется:
+
+* drf-spectacular
+* Swagger UI
+
+Swagger документация:
+
+```
+http://127.0.0.1:8000/api/docs/
+```
+
+OpenAPI schema:
+
+```
+http://127.0.0.1:8000/api/schema/
+```
+
+---
+
+# Структура проекта
+
+```
+DRF_homework_on-line_platform
+
+├── users
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── permissions.py
+│
+├── lms
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   ├── services.py
+│   ├── permissions.py
+│   ├── validators.py
+│   ├── tasks.py
+│   └── tests
+│
+└── config
+    ├── settings.py
+    ├── celery.py
+    └── urls.py
+```
+
+---
+
+# Приложение users
+
+Реализовано:
+
+* кастомная модель пользователя
+* регистрация пользователей
+* JWT authentication
+* управление пользователями
+
+Модель пользователя:
+
+* email
+* phone
+* city
+* avatar
+
+Email используется как:
+
+```
+USERNAME_FIELD
+```
+
+---
+
+# Приложение lms
+
+Основные модели:
+
+* Course
+* Lesson
+* Subscription
+* Payment
+
+---
+
+# Course
+
+Курс содержит:
+
+Поля:
+
+* owner
+* title
+* description
+* preview
+* price
+* updated_at
+
+Связь:
+
+```
+Course 1 ---- N Lesson
+```
+
+При обновлении курса запускается уведомление подписчиков.
+
+---
+
+# Lesson
+
+Поля:
+
+* owner
+* course
+* title
+* description
+* preview
+* video_url
+
+Для поля `video_url` реализована проверка:
+
+* разрешены только YouTube ссылки
+
+---
+
+# Subscription
+
+Подписка пользователя на курс.
+
+Поля:
+
+* user
+* course
+
+Связь:
+
+```
+User 1 ---- N Subscription N ---- 1 Course
+```
+
+Добавление или удаление подписки выполняется одним запросом.
+
+---
+
+# Payment
+
+Оплата курса через Stripe.
+
+Поля:
+
+* user
+* paid_course
+* amount
+* payment_method
+* status
+* stripe_product_id
+* stripe_price_id
+* stripe_session_id
+* payment_link
+
+---
+
+# Stripe Integration
+
+Реализован сервисный слой:
+
+```
+lms/services.py
+```
+
+Используются:
+
+Создание продукта:
+
+```python
+stripe.Product.create()
+```
+
+Создание цены:
+
+```python
+stripe.Price.create()
+```
+
+Создание Checkout Session:
+
+```python
+stripe.checkout.Session.create()
+```
+
+В ответ пользователю возвращается:
+
+* информация о платеже
+* ссылка на оплату Stripe Checkout
+
+---
+
+# Аутентификация
+
+Используется JWT через SimpleJWT.
+
+Получение токена:
+
+```
+POST /api/token/
+```
+
+Пример:
+
+```json
+{
+    "email": "test@test.com",
+    "password": "password"
+}
+```
+
+Ответ:
+
+```json
+{
+    "refresh": "token",
+    "access": "token"
+}
+```
+
+Обновление:
+
+```
+POST /api/token/refresh/
+```
+
+Для защищенных запросов:
+
+```
+Authorization: Bearer <access_token>
+```
+
+---
+
+# Права доступа
+
+## Обычный пользователь
+
+Может:
+
+* создавать свои курсы
+* создавать свои уроки
+* редактировать свои объекты
+* удалять свои объекты
+* подписываться на курсы
+* создавать платежи
+
+Не может:
+
+* изменять чужие объекты
+
+---
+
+## Модератор
+
+Группа:
+
+```
+moderators
+```
+
+Может:
+
+* видеть все курсы
+* видеть все уроки
+* редактировать любые курсы
+* редактировать любые уроки
+
+Не может:
+
+* создавать курсы
+* создавать уроки
+* удалять курсы
+* удалять уроки
+
+---
+
+# API Endpoints
+
+## Users
+
+```
+GET    /api/users/
+POST   /api/users/
+GET    /api/users/{id}/
+```
+
+## Courses
+
+```
+GET    /api/courses/
+POST   /api/courses/
+GET    /api/courses/{id}/
+PUT    /api/courses/{id}/
+PATCH  /api/courses/{id}/
 DELETE /api/courses/{id}/
+```
 
-Lessons
+## Lessons
 
-GET /api/lessons/
-POST /api/lessons/
-GET /api/lessons/{id}/
-PUT /api/lessons/{id}/
+```
+GET    /api/lessons/
+POST   /api/lessons/
+GET    /api/lessons/{id}/
+PUT    /api/lessons/{id}/
+PATCH  /api/lessons/{id}/
 DELETE /api/lessons/{id}/
+```
 
-Users
+## Subscription
 
-GET /api/users/
-POST /api/users/
-GET /api/users/{id}/
-PUT /api/users/{id}/
-DELETE /api/users/{id}/
+```
+POST /api/subscription/
+```
 
-Примеры запросов
+Запрос:
 
-Создание курса
-
-POST /api/courses/
+```json
 {
-  "title": "Django",
-  "description": "Django course",
-  "preview": null
+    "course_id": 1
 }
-Создание урока
+```
 
-POST /api/lessons/
+Ответ:
+
+```json
 {
-  "title": "Lesson 1",
-  "description": "Intro",
-  "video_url": "https://youtube.com",
-  "course": 1
+    "message": "Подписка добавлена"
 }
-Особенности реализации: 
+```
 
-используется ModelViewSet для Course
-GenericAPIView для Lesson
-кастомная модель пользователя (AbstractBaseUser)
-связи Course → Lesson (One-to-Many)
-API возвращает JSON
+---
 
-- Автор
+## Payments
+
+```
+GET  /api/payments/
+POST /api/payments/create/
+```
+
+---
+
+# Тестирование
+
+Реализованы автоматические тесты:
+
+* users
+* courses
+* lessons
+* permissions
+* subscriptions
+* payments
+
+Запуск:
+
+```bash
+poetry run pytest
+```
+
+Результат:
+
+```
+20 passed
+```
+
+Проверка покрытия:
+
+```bash
+poetry run coverage run -m pytest
+
+poetry run coverage report
+```
+
+---
+
+# Проверка проекта
+
+Проверка Django:
+
+```bash
+python manage.py check
+```
+
+Создание миграций:
+
+```bash
+python manage.py makemigrations
+```
+
+Применение миграций:
+
+```bash
+python manage.py migrate
+```
+
+---
+
+# Реализованные дополнительные возможности
+
+* кастомная модель пользователя
+* JWT authentication
+* DRF permissions
+* роли пользователей
+* группа moderators
+* автоматическое заполнение owner
+* пагинация
+* YouTube validator
+* Swagger документация
+* Stripe API integration
+* сохранение платежных данных
+* автоматические тесты
+* Celery background tasks
+* Redis message broker
+* Celery Beat scheduler
+* django-celery-beat periodic tasks
+* уведомления подписчиков курса
+* автоматическая блокировка неактивных пользователей
+
+---
+
+# Автор
 
 Olesia Laskovets
-DRF homework project — LMS platform
+
+DRF Homework Project — LMS Platform

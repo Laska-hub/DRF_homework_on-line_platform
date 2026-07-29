@@ -25,3 +25,7 @@ staticfiles/
 
 # macOS
 .DS_Store
+
+# Coverage
+.coverage
+htmlcov/
