@@ -22,7 +22,7 @@ jobs:
           source: "."
           target: "~/DRF_homework_on-line_platform"
           overwrite: true
-          exclude: ".env"
+
 
       - name: Create .env and deploy
         uses: appleboy/ssh-action@v1.2.2
