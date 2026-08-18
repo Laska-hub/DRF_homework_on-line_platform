@@ -33,6 +33,7 @@ jobs:
             POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
             POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
             REDIS_URL=${{ secrets.REDIS_URL }}
+            ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
             EOF
 
             docker compose up -d --build
