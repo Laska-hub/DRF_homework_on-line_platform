@@ -12,8 +12,8 @@ load_dotenv(BASE_DIR / ".env")
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-n#vhr25jksi6=dj7_0gv4^+u-ovdn12zncyu_3-n*v0u(8@*vv'
 
+SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -114,8 +114,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
-
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "static"
 
 AUTH_USER_MODEL = "users.User"
 
