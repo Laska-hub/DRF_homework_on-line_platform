@@ -4,8 +4,7 @@
 
 Backend часть LMS (Learning Management System), разработанная на Django и Django REST Framework.
 
-Проект представляет собой онлайн-платформу для обучения, позволяющую пользователям работать с курсами, 
-уроками, подписками и оплатой курсов.
+Проект представляет собой онлайн-платформу для обучения, позволяющую пользователям работать с курсами, уроками, подписками и оплатой курсов.
 
 В проекте реализованы:
 
@@ -20,27 +19,55 @@ Backend часть LMS (Learning Management System), разработанная 
 * оплата курсов через Stripe API
 * генерация API документации
 * асинхронные задачи через Celery
-* очереди задач через Redis
+* Redis как брокер сообщений
 * периодические задачи через Celery Beat
+* PostgreSQL для хранения данных
 
+---
 
 # Технологии
 
 * Python 3.13+
 * Django 6
 * Django REST Framework
+* PostgreSQL 16
 * drf-spectacular
 * djangorestframework-simplejwt
 * Stripe API
 * Celery
 * Redis
 * django-celery-beat
-* SQLite
 * Pillow
 * Poetry
 * pytest
 * pytest-django
 * coverage
+* Docker
+* Docker Compose
+
+---
+
+# Docker Compose
+
+Для запуска проекта используются следующие сервисы:
+
+* `web` — Django-приложение
+* `db` — PostgreSQL
+* `redis` — Redis
+* `celery` — Celery Worker
+* `celery-beat` — Celery Beat
+
+Все сервисы запускаются одной командой:
+
+```bash
+docker compose up
+```
+
+Для запуска в фоновом режиме:
+
+```bash
+docker compose up -d
+```
 
 ---
 
@@ -54,63 +81,175 @@ git clone git@github.com:Laska-hub/DRF_homework_on-line_platform.git
 cd DRF_homework_on-line_platform
 ```
 
-## 2. Установить зависимости
+## 2. Создать файл `.env`
+
+Скопировать `.env.example`:
 
 ```bash
-poetry install
+cp .env.example .env
 ```
 
-или:
-
-```bash
-poetry install --no-root
-```
-
-## 3. Настроить переменные окружения
-
-Создать файл `.env`:
+Пример содержимого `.env`:
 
 ```env
 SECRET_KEY=your_secret_key
 
 STRIPE_SECRET_KEY=your_stripe_secret_key
 
-REDIS_URL=redis://127.0.0.1:6379/0
+POSTGRES_DB=lms
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+REDIS_URL=redis://redis:6379/0
 ```
 
-Stripe ключ можно получить в тестовом режиме:
+Для реального использования необходимо указать собственный `SECRET_KEY` и Stripe API key.
 
-https://dashboard.stripe.com/test/apikeys
+Файл `.env` не должен попадать в репозиторий.
 
-## 4. Активировать окружение
+---
+
+## 3. Запустить проект
+
+Запустить все сервисы одной командой:
 
 ```bash
-poetry shell
+docker compose up
 ```
 
-## 5. Выполнить миграции
+Или в фоновом режиме:
 
 ```bash
-python manage.py migrate
+docker compose up -d
 ```
 
-## 6. Создать группу модераторов
+После запуска Django будет доступен по адресу:
 
-Загрузить фикстуру:
-
-```bash
-python manage.py loaddata users/fixtures/groups.json
-```
-
-## 7. Запустить сервер
-
-```bash
-python manage.py runserver
+```text
+http://127.0.0.1:8000/
 ```
 
 ---
 
-# Celery и фоновые задачи
+# Проверка состояния контейнеров
+
+Посмотреть запущенные контейнеры:
+
+```bash
+docker compose ps
+```
+
+Ожидаются следующие сервисы:
+
+```text
+web
+db
+redis
+celery
+celery-beat
+```
+
+Посмотреть логи:
+
+```bash
+docker compose logs
+```
+
+Логи конкретного сервиса:
+
+```bash
+docker compose logs web
+docker compose logs celery
+docker compose logs celery-beat
+docker compose logs db
+docker compose logs redis
+```
+
+---
+
+# Остановка проекта
+
+Остановить контейнеры:
+
+```bash
+docker compose down
+```
+
+Остановка контейнеров не удаляет Docker volumes с данными PostgreSQL и Redis.
+
+Для повторного запуска:
+
+```bash
+docker compose up
+```
+
+---
+
+# PostgreSQL
+
+PostgreSQL используется в качестве основной базы данных проекта.
+
+Данные базы сохраняются в Docker volume:
+
+```text
+postgres_data
+```
+
+Проверить volumes:
+
+```bash
+docker volume ls
+```
+
+PostgreSQL внутри Docker-сети доступен по адресу:
+
+```text
+db:5432
+```
+
+Переменные подключения:
+
+```env
+POSTGRES_DB=lms
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+```
+
+Порт PostgreSQL не публикуется наружу, так как внешний доступ к базе данных для проекта не требуется.
+
+---
+
+# Redis
+
+Redis используется как брокер сообщений для Celery.
+
+Данные Redis сохраняются в Docker volume:
+
+```text
+redis_data
+```
+
+Redis внутри Docker-сети доступен по адресу:
+
+```text
+redis:6379
+```
+
+Переменная подключения:
+
+```env
+REDIS_URL=redis://redis:6379/0
+```
+
+Порт Redis не публикуется наружу, так как внешнее подключение к Redis не требуется.
+
+---
+
+# Celery
 
 В проекте реализована обработка фоновых задач через Celery.
 
@@ -121,20 +260,30 @@ python manage.py runserver
 * Celery Beat для периодических задач
 * django-celery-beat для хранения расписания
 
-## Запуск Celery Worker
-
-Отдельный терминал:
+Celery Worker запускается автоматически вместе с Docker Compose:
 
 ```bash
-poetry run celery -A config worker -l info
+docker compose up
 ```
 
-## Запуск Celery Beat
+Отдельно запускать Celery Worker не требуется.
 
-Отдельный терминал:
+---
+
+# Celery Beat
+
+Celery Beat используется для запуска периодических задач.
+
+Celery Beat также запускается автоматически:
 
 ```bash
-poetry run celery -A config beat -l info
+docker compose up
+```
+
+Используется планировщик:
+
+```python
+django_celery_beat.schedulers.DatabaseScheduler
 ```
 
 ---
@@ -143,19 +292,13 @@ poetry run celery -A config beat -l info
 
 ## Уведомление подписчиков курса
 
-При обновлении курса:
-
-* проверяется время последнего обновления
-* если курс не обновлялся более 4 часов
-* запускается фоновая задача отправки уведомлений
-
-Task:
+При обновлении курса запускается фоновая задача:
 
 ```python
 lms.tasks.send_course_update_email
 ```
 
-Получатели берутся из подписок курса.
+Задача отправляет уведомления пользователям, подписанным на курс.
 
 Email backend:
 
@@ -163,14 +306,12 @@ Email backend:
 django.core.mail.backends.console.EmailBackend
 ```
 
-В учебной версии письма выводятся в консоль.
+В учебной версии письма выводятся в консоль контейнера `celery`.
 
-Пример результата:
+Логи можно посмотреть:
 
-```
-Subject: Обновление курса
-
-Материалы курса были обновлены.
+```bash
+docker compose logs -f celery
 ```
 
 ---
@@ -183,69 +324,122 @@ Subject: Обновление курса
 lms.tasks.deactivate_inactive_users
 ```
 
-Задача:
-
-* проверяет пользователей
-* отключает пользователей, которые долго не проявляли активность
+Задача проверяет пользователей и отключает пользователей, которые долго не проявляли активность.
 
 Расписание:
 
+```text
 ежедневно в 00:00
+```
 
-Используется:
+---
 
-```python
-django_celery_beat.schedulers.DatabaseScheduler
+# Миграции
+
+При запуске контейнера `web` миграции выполняются автоматически:
+
+```bash
+python manage.py migrate
+```
+
+Команда запуска Django:
+
+```text
+bash -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+```
+
+При необходимости выполнить миграции вручную:
+
+```bash
+docker compose exec web python manage.py migrate
+```
+
+Создать новые миграции:
+
+```bash
+docker compose exec web python manage.py makemigrations
+```
+
+---
+
+# Создание суперпользователя
+
+Создать администратора:
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+После создания администратора доступна Django Admin:
+
+```text
+http://127.0.0.1:8000/admin/
+```
+
+---
+
+# Аутентификация
+
+Используется JWT-аутентификация через SimpleJWT.
+
+Получение токена:
+
+```text
+POST /api/token/
+```
+
+Пример запроса:
+
+```json
+{
+    "email": "test@test.com",
+    "password": "password"
+}
+```
+
+Ответ:
+
+```json
+{
+    "refresh": "token",
+    "access": "token"
+}
+```
+
+Обновление токена:
+
+```text
+POST /api/token/refresh/
+```
+
+Для защищённых запросов используется заголовок:
+
+```text
+Authorization: Bearer <access_token>
 ```
 
 ---
 
 # Документация API
 
-В проекте используется:
+В проекте используется `drf-spectacular`.
 
-* drf-spectacular
-* Swagger UI
+## Swagger
 
-Swagger документация:
-
-```
+```text
 http://127.0.0.1:8000/api/docs/
 ```
 
-OpenAPI schema:
+## OpenAPI schema
 
-```
+```text
 http://127.0.0.1:8000/api/schema/
 ```
 
----
+## ReDoc
 
-# Структура проекта
-
-```
-DRF_homework_on-line_platform
-
-├── users
-│   ├── models.py
-│   ├── serializers.py
-│   ├── views.py
-│   └── permissions.py
-│
-├── lms
-│   ├── models.py
-│   ├── serializers.py
-│   ├── views.py
-│   ├── services.py
-│   ├── permissions.py
-│   ├── validators.py
-│   ├── tasks.py
-│   └── tests
-│
-└── config
-    ├── settings.py
-    ├── celery.py
-    └── urls.py
+```text
+http://127.0.0.1:8000/api/redoc/
 ```
 
 ---
@@ -258,8 +452,9 @@ DRF_homework_on-line_platform
 * регистрация пользователей
 * JWT authentication
 * управление пользователями
+* роли пользователей
 
-Модель пользователя:
+Модель пользователя содержит:
 
 * email
 * phone
@@ -268,8 +463,8 @@ DRF_homework_on-line_platform
 
 Email используется как:
 
-```
-USERNAME_FIELD
+```python
+USERNAME_FIELD = "email"
 ```
 
 ---
@@ -289,8 +484,6 @@ USERNAME_FIELD
 
 Курс содержит:
 
-Поля:
-
 * owner
 * title
 * description
@@ -300,7 +493,7 @@ USERNAME_FIELD
 
 Связь:
 
-```
+```text
 Course 1 ---- N Lesson
 ```
 
@@ -310,7 +503,7 @@ Course 1 ---- N Lesson
 
 # Lesson
 
-Поля:
+Урок содержит:
 
 * owner
 * course
@@ -319,9 +512,9 @@ Course 1 ---- N Lesson
 * preview
 * video_url
 
-Для поля `video_url` реализована проверка:
+Для поля `video_url` реализована проверка.
 
-* разрешены только YouTube ссылки
+Разрешены только ссылки на YouTube.
 
 ---
 
@@ -336,7 +529,7 @@ Course 1 ---- N Lesson
 
 Связь:
 
-```
+```text
 User 1 ---- N Subscription N ---- 1 Course
 ```
 
@@ -366,76 +559,31 @@ User 1 ---- N Subscription N ---- 1 Course
 
 Реализован сервисный слой:
 
-```
+```text
 lms/services.py
 ```
 
 Используются:
 
-Создание продукта:
-
 ```python
 stripe.Product.create()
 ```
 
-Создание цены:
+для создания продукта,
 
 ```python
 stripe.Price.create()
 ```
 
-Создание Checkout Session:
+для создания цены,
 
 ```python
 stripe.checkout.Session.create()
 ```
 
-В ответ пользователю возвращается:
+для создания Checkout Session.
 
-* информация о платеже
-* ссылка на оплату Stripe Checkout
-
----
-
-# Аутентификация
-
-Используется JWT через SimpleJWT.
-
-Получение токена:
-
-```
-POST /api/token/
-```
-
-Пример:
-
-```json
-{
-    "email": "test@test.com",
-    "password": "password"
-}
-```
-
-Ответ:
-
-```json
-{
-    "refresh": "token",
-    "access": "token"
-}
-```
-
-Обновление:
-
-```
-POST /api/token/refresh/
-```
-
-Для защищенных запросов:
-
-```
-Authorization: Bearer <access_token>
-```
+Пользователю возвращается ссылка на оплату Stripe Checkout.
 
 ---
 
@@ -462,7 +610,7 @@ Authorization: Bearer <access_token>
 
 Группа:
 
-```
+```text
 moderators
 ```
 
@@ -486,7 +634,7 @@ moderators
 
 ## Users
 
-```
+```text
 GET    /api/users/
 POST   /api/users/
 GET    /api/users/{id}/
@@ -494,7 +642,7 @@ GET    /api/users/{id}/
 
 ## Courses
 
-```
+```text
 GET    /api/courses/
 POST   /api/courses/
 GET    /api/courses/{id}/
@@ -505,7 +653,7 @@ DELETE /api/courses/{id}/
 
 ## Lessons
 
-```
+```text
 GET    /api/lessons/
 POST   /api/lessons/
 GET    /api/lessons/{id}/
@@ -516,11 +664,11 @@ DELETE /api/lessons/{id}/
 
 ## Subscription
 
-```
+```text
 POST /api/subscription/
 ```
 
-Запрос:
+Пример запроса:
 
 ```json
 {
@@ -528,7 +676,7 @@ POST /api/subscription/
 }
 ```
 
-Ответ:
+Пример ответа:
 
 ```json
 {
@@ -540,7 +688,7 @@ POST /api/subscription/
 
 ## Payments
 
-```
+```text
 GET  /api/payments/
 POST /api/payments/create/
 ```
@@ -549,7 +697,7 @@ POST /api/payments/create/
 
 # Тестирование
 
-Реализованы автоматические тесты:
+В проекте реализованы автоматические тесты:
 
 * users
 * courses
@@ -558,24 +706,17 @@ POST /api/payments/create/
 * subscriptions
 * payments
 
-Запуск:
+Запуск тестов в Docker:
 
 ```bash
-poetry run pytest
-```
-
-Результат:
-
-```
-20 passed
+docker compose exec web pytest
 ```
 
 Проверка покрытия:
 
 ```bash
-poetry run coverage run -m pytest
-
-poetry run coverage report
+docker compose exec web coverage run -m pytest
+docker compose exec web coverage report
 ```
 
 ---
@@ -585,24 +726,90 @@ poetry run coverage report
 Проверка Django:
 
 ```bash
-python manage.py check
+docker compose exec web python manage.py check
 ```
 
 Создание миграций:
 
 ```bash
-python manage.py makemigrations
+docker compose exec web python manage.py makemigrations
 ```
 
 Применение миграций:
 
 ```bash
-python manage.py migrate
+docker compose exec web python manage.py migrate
 ```
 
 ---
 
-# Реализованные дополнительные возможности
+# Структура Docker Compose
+
+```text
+DRF_homework_on-line_platform
+│
+├── docker-compose.yml
+├── Dockerfile
+├── .env
+├── .env.example
+├── .gitignore
+├── README.md
+│
+├── users
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── permissions.py
+│
+├── lms
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   ├── services.py
+│   ├── permissions.py
+│   ├── validators.py
+│   ├── tasks.py
+│   └── tests
+│
+└── config
+    ├── settings.py
+    ├── celery.py
+    └── urls.py
+```
+
+---
+
+# Docker Volumes
+
+Для сохранности данных используются Docker volumes:
+
+```text
+postgres_data
+redis_data
+static_volume
+```
+
+PostgreSQL:
+
+```text
+postgres_data:/var/lib/postgresql/data/
+```
+
+Redis:
+
+```text
+redis_data:/data
+```
+
+Static files:
+
+```text
+static_volume:/code/static
+```
+
+---
+
+# Дополнительные возможности
 
 * кастомная модель пользователя
 * JWT authentication
@@ -622,6 +829,9 @@ python manage.py migrate
 * django-celery-beat periodic tasks
 * уведомления подписчиков курса
 * автоматическая блокировка неактивных пользователей
+* Docker Compose
+* PostgreSQL
+* Docker volumes для сохранения данных
 
 ---
 
