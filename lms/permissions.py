@@ -9,9 +9,7 @@ class IsModerator(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated
-            and request.user.groups.filter(
-                name="moderators"
-            ).exists()
+            and request.user.groups.filter(name="moderators").exists()
         )
 
 
@@ -21,10 +19,7 @@ class IsOwner(BasePermission):
     """
 
     def has_object_permission(self, request, view, obj):
-        return (
-            request.user.is_authenticated
-            and obj.owner == request.user
-        )
+        return request.user.is_authenticated and obj.owner == request.user
 
 
 class IsOwnerOrModerator(BasePermission):
@@ -33,14 +28,9 @@ class IsOwnerOrModerator(BasePermission):
     """
 
     def has_object_permission(self, request, view, obj):
-        return (
-            request.user.is_authenticated
-            and (
-                obj.owner == request.user
-                or request.user.groups.filter(
-                    name="moderators"
-                ).exists()
-            )
+        return request.user.is_authenticated and (
+            obj.owner == request.user
+            or request.user.groups.filter(name="moderators").exists()
         )
 
 
@@ -52,7 +42,5 @@ class IsNotModerator(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated
-            and not request.user.groups.filter(
-                name="moderators"
-            ).exists()
+            and not request.user.groups.filter(name="moderators").exists()
         )

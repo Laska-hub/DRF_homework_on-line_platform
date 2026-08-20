@@ -1,14 +1,12 @@
 from datetime import timedelta
 
 from celery import shared_task
-
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils import timezone
 
 from .models import Subscription
-
 
 User = get_user_model()
 
@@ -47,15 +45,9 @@ def deactivate_inactive_users():
 
     month_ago = timezone.now() - timedelta(days=30)
 
-    updated_count = (
-        User.objects
-        .filter(
-            last_login__lt=month_ago,
-            is_active=True,
-        )
-        .update(
-            is_active=False
-        )
-    )
+    updated_count = User.objects.filter(
+        last_login__lt=month_ago,
+        is_active=True,
+    ).update(is_active=False)
 
     return f"Заблокировано пользователей: {updated_count}"

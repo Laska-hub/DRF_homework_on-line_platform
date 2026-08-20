@@ -1,4 +1,4 @@
-name: Deploy to server
+name: CI/CD
 
 on:
   push:
@@ -6,8 +6,100 @@ on:
       - homework_ci_cd
 
 jobs:
-  deploy:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-ansi
+
+      - name: Run flake8
+        run: poetry run flake8 .
+
+      - name: Check isort
+        run: poetry run isort . --check-only
+
+      - name: Check black
+        run: poetry run black . --check
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env
+        run: |
+          cat > .env <<EOF
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST=db
+          POSTGRES_PORT=5432
+          REDIS_URL=redis://redis:6379/0
+          ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+          EOF
+
+      - name: Build web image
+        run: docker compose build web
+
+      - name: Start database and Redis
+        run: docker compose up -d db redis
+
+      - name: Run tests
+        run: docker compose run --rm web pytest
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env
+        run: |
+          cat > .env <<EOF
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST=db
+          POSTGRES_PORT=5432
+          REDIS_URL=redis://redis:6379/0
+          ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+          EOF
+
+      - name: Build Docker images
+        run: docker compose build
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build
 
     steps:
       - name: Deploy to server
