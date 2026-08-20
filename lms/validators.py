@@ -16,6 +16,4 @@ class YouTubeValidator:
             return
 
         if "youtube.com" not in url:
-            raise ValidationError(
-                "Разрешены ссылки только на youtube.com."
-            )
+            raise ValidationError("Разрешены ссылки только на youtube.com.")

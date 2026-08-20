@@ -17,11 +17,15 @@ Backend часть LMS (Learning Management System), разработанная 
 * управление уроками
 * подписка на курсы
 * оплата курсов через Stripe API
-* генерация API документации
+* API-документация
 * асинхронные задачи через Celery
 * Redis как брокер сообщений
 * периодические задачи через Celery Beat
 * PostgreSQL для хранения данных
+* Docker и Docker Compose
+* Gunicorn для запуска Django-приложения
+* Nginx как reverse proxy
+* автоматический деплой через GitHub Actions
 
 ---
 
@@ -44,6 +48,46 @@ Backend часть LMS (Learning Management System), разработанная 
 * coverage
 * Docker
 * Docker Compose
+* Gunicorn
+* Nginx
+* GitHub Actions
+
+---
+
+# Архитектура проекта
+
+Проект работает по следующей схеме:
+
+```text
+                    Internet
+                       │
+                       ▼
+                  ┌─────────┐
+                  │  Nginx  │
+                  │ :80     │
+                  └────┬────┘
+                       │
+                       ▼
+               ┌──────────────┐
+               │   Gunicorn   │
+               │    :8000     │
+               └──────┬───────┘
+                      │
+                      ▼
+               ┌──────────────┐
+               │    Django    │
+               │     API      │
+               └──────┬───────┘
+                      │
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+      PostgreSQL    Redis      Celery
+                                  │
+                                  ▼
+                             Celery Beat
+```
+
+Nginx принимает внешние HTTP-запросы и передаёт их Django-приложению через Gunicorn.
 
 ---
 
@@ -51,7 +95,7 @@ Backend часть LMS (Learning Management System), разработанная 
 
 Для запуска проекта используются следующие сервисы:
 
-* `web` — Django-приложение
+* `web` — Django-приложение + Gunicorn
 * `db` — PostgreSQL
 * `redis` — Redis
 * `celery` — Celery Worker
@@ -69,9 +113,15 @@ docker compose up
 docker compose up -d
 ```
 
+Проверить состояние контейнеров:
+
+```bash
+docker compose ps
+```
+
 ---
 
-# Установка и запуск проекта
+# Установка и локальный запуск проекта
 
 ## 1. Клонировать репозиторий
 
@@ -111,24 +161,152 @@ REDIS_URL=redis://redis:6379/0
 
 ---
 
-## 3. Запустить проект
-
-Запустить все сервисы одной командой:
-
-```bash
-docker compose up
-```
-
-Или в фоновом режиме:
+## 3. Запустить Docker Compose
 
 ```bash
 docker compose up -d
 ```
 
-После запуска Django будет доступен по адресу:
+После запуска Django-приложение внутри Docker доступно на:
 
 ```text
 http://127.0.0.1:8000/
+```
+
+API-документация:
+
+```text
+http://127.0.0.1:8000/api/docs/
+```
+
+---
+
+# Gunicorn
+
+Для запуска Django-приложения используется Gunicorn.
+
+Gunicorn запускается внутри контейнера `web` и слушает:
+
+```text
+0.0.0.0:8000
+```
+
+Проверить запуск Gunicorn:
+
+```bash
+docker compose logs web
+```
+
+В логах должно присутствовать:
+
+```text
+Starting gunicorn
+Listening at: http://0.0.0.0:8000
+```
+
+Gunicorn используется вместо встроенного Django development server.
+
+---
+
+# Nginx
+
+Nginx используется как reverse proxy перед Gunicorn.
+
+Схема обработки запроса:
+
+```text
+Client
+  │
+  ▼
+Nginx :80
+  │
+  ▼
+Gunicorn :8000
+  │
+  ▼
+Django
+```
+
+Nginx принимает внешние HTTP-запросы и передаёт их приложению.
+
+Проверить конфигурацию Nginx:
+
+```bash
+sudo nginx -t
+```
+
+Перезагрузить Nginx после изменения конфигурации:
+
+```bash
+sudo systemctl reload nginx
+```
+
+Проверить статус:
+
+```bash
+sudo systemctl status nginx --no-pager
+```
+
+---
+
+# API Documentation
+
+В проекте используется `drf-spectacular`.
+
+## Swagger
+
+Локально:
+
+```text
+http://127.0.0.1:8000/api/docs/
+```
+
+На сервере:
+
+```text
+http://SERVER_IP/api/docs/
+```
+
+## OpenAPI schema
+
+```text
+http://127.0.0.1:8000/api/schema/
+```
+
+## ReDoc
+
+```text
+http://127.0.0.1:8000/api/redoc/
+```
+
+---
+
+# Проверка API
+
+Проверить Swagger через curl:
+
+```bash
+curl -I http://127.0.0.1:8000/api/docs/
+```
+
+При работающем Django/Gunicorn ожидается:
+
+```text
+HTTP/1.1 200 OK
+Server: gunicorn
+```
+
+При обращении через Nginx:
+
+```bash
+curl -I http://SERVER_IP/api/docs/
+```
+
+Ожидается:
+
+```text
+HTTP/1.1 200 OK
+Server: nginx
 ```
 
 ---
@@ -151,7 +329,7 @@ celery
 celery-beat
 ```
 
-Посмотреть логи:
+Посмотреть все логи:
 
 ```bash
 docker compose logs
@@ -167,6 +345,12 @@ docker compose logs db
 docker compose logs redis
 ```
 
+Следить за логами в реальном времени:
+
+```bash
+docker compose logs -f web
+```
+
 ---
 
 # Остановка проекта
@@ -177,12 +361,16 @@ docker compose logs redis
 docker compose down
 ```
 
-Остановка контейнеров не удаляет Docker volumes с данными PostgreSQL и Redis.
-
 Для повторного запуска:
 
 ```bash
-docker compose up
+docker compose up -d
+```
+
+Docker volumes с данными PostgreSQL сохраняются после обычного:
+
+```bash
+docker compose down
 ```
 
 ---
@@ -195,12 +383,6 @@ PostgreSQL используется в качестве основной баз�
 
 ```text
 postgres_data
-```
-
-Проверить volumes:
-
-```bash
-docker volume ls
 ```
 
 PostgreSQL внутри Docker-сети доступен по адресу:
@@ -219,19 +401,13 @@ POSTGRES_HOST=db
 POSTGRES_PORT=5432
 ```
 
-Порт PostgreSQL не публикуется наружу, так как внешний доступ к базе данных для проекта не требуется.
+Порт PostgreSQL не публикуется наружу, так как внешний доступ к базе данных не требуется.
 
 ---
 
 # Redis
 
 Redis используется как брокер сообщений для Celery.
-
-Данные Redis сохраняются в Docker volume:
-
-```text
-redis_data
-```
 
 Redis внутри Docker-сети доступен по адресу:
 
@@ -260,13 +436,7 @@ REDIS_URL=redis://redis:6379/0
 * Celery Beat для периодических задач
 * django-celery-beat для хранения расписания
 
-Celery Worker запускается автоматически вместе с Docker Compose:
-
-```bash
-docker compose up
-```
-
-Отдельно запускать Celery Worker не требуется.
+Celery Worker запускается автоматически вместе с Docker Compose.
 
 ---
 
@@ -274,11 +444,7 @@ docker compose up
 
 Celery Beat используется для запуска периодических задач.
 
-Celery Beat также запускается автоматически:
-
-```bash
-docker compose up
-```
+Celery Beat запускается автоматически вместе с Docker Compose.
 
 Используется планировщик:
 
@@ -308,7 +474,7 @@ django.core.mail.backends.console.EmailBackend
 
 В учебной версии письма выводятся в консоль контейнера `celery`.
 
-Логи можно посмотреть:
+Посмотреть логи:
 
 ```bash
 docker compose logs -f celery
@@ -336,19 +502,9 @@ lms.tasks.deactivate_inactive_users
 
 # Миграции
 
-При запуске контейнера `web` миграции выполняются автоматически:
+Миграции выполняются автоматически при запуске контейнера `web`.
 
-```bash
-python manage.py migrate
-```
-
-Команда запуска Django:
-
-```text
-bash -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
-```
-
-При необходимости выполнить миграции вручную:
+Для ручного запуска:
 
 ```bash
 docker compose exec web python manage.py migrate
@@ -416,30 +572,6 @@ POST /api/token/refresh/
 
 ```text
 Authorization: Bearer <access_token>
-```
-
----
-
-# Документация API
-
-В проекте используется `drf-spectacular`.
-
-## Swagger
-
-```text
-http://127.0.0.1:8000/api/docs/
-```
-
-## OpenAPI schema
-
-```text
-http://127.0.0.1:8000/api/schema/
-```
-
-## ReDoc
-
-```text
-http://127.0.0.1:8000/api/redoc/
 ```
 
 ---
@@ -684,8 +816,6 @@ POST /api/subscription/
 }
 ```
 
----
-
 ## Payments
 
 ```text
@@ -706,7 +836,7 @@ POST /api/payments/create/
 * subscriptions
 * payments
 
-Запуск тестов в Docker:
+Запуск тестов:
 
 ```bash
 docker compose exec web pytest
@@ -743,38 +873,111 @@ docker compose exec web python manage.py migrate
 
 ---
 
-# Структура Docker Compose
+# CI/CD и автоматический деплой
+
+Для автоматического деплоя используется GitHub Actions.
+
+Workflow находится в:
 
 ```text
-DRF_homework_on-line_platform
-│
-├── docker-compose.yml
-├── Dockerfile
-├── .env
-├── .env.example
-├── .gitignore
-├── README.md
-│
-├── users
-│   ├── models.py
-│   ├── serializers.py
-│   ├── views.py
-│   └── permissions.py
-│
-├── lms
-│   ├── models.py
-│   ├── serializers.py
-│   ├── views.py
-│   ├── services.py
-│   ├── permissions.py
-│   ├── validators.py
-│   ├── tasks.py
-│   └── tests
-│
-└── config
-    ├── settings.py
-    ├── celery.py
-    └── urls.py
+.github/workflows/deploy.yml
+```
+
+Workflow запускается при push в ветку:
+
+```text
+homework_ci_cd
+```
+
+Основные этапы:
+
+1. Checkout репозитория.
+2. Копирование проекта на сервер через SCP.
+3. Подключение к серверу по SSH.
+4. Создание `.env` из GitHub Repository Secrets.
+5. Сборка Docker-образов.
+6. Запуск контейнеров через Docker Compose.
+
+Схема:
+
+```text
+Git push
+   │
+   ▼
+GitHub Actions
+   │
+   ├── Checkout
+   │
+   ├── SCP → Server
+   │
+   └── SSH
+        │
+        ├── create .env
+        │
+        └── docker compose up -d --build
+                         │
+                         ▼
+                 Docker containers
+```
+
+Для подключения к серверу используются GitHub Repository Secrets:
+
+```text
+SERVER_HOST
+SERVER_USER
+SSH_PRIVATE_KEY
+```
+
+Переменные окружения приложения также передаются через GitHub Secrets:
+
+```text
+SECRET_KEY
+STRIPE_SECRET_KEY
+POSTGRES_DB
+POSTGRES_HOST
+POSTGRES_USER
+POSTGRES_PASSWORD
+POSTGRES_PORT
+REDIS_URL
+```
+
+Файл `.env` создаётся непосредственно на сервере во время деплоя и не хранится в репозитории.
+
+---
+
+# Серверный деплой
+
+На сервере проект размещается в директории:
+
+```text
+~/DRF_homework_on-line_platform
+```
+
+После успешного деплоя контейнеры можно проверить:
+
+```bash
+cd ~/DRF_homework_on-line_platform
+
+docker compose ps
+```
+
+Проверить работу Django напрямую через Gunicorn:
+
+```bash
+curl -I http://127.0.0.1:8000/api/docs/
+```
+
+Проверить работу приложения через Nginx:
+
+```bash
+curl -I http://SERVER_IP/api/docs/
+```
+
+Ожидаемый результат:
+
+```text
+HTTP/1.1 200 OK
+Server: nginx
 ```
 
 ---
@@ -809,6 +1012,45 @@ static_volume:/code/static
 
 ---
 
+# Структура проекта
+
+```text
+DRF_homework_on-line_platform
+│
+├── .github
+│   └── workflows
+│       └── deploy.yml
+│
+├── docker-compose.yml
+├── Dockerfile
+├── .env.example
+├── .gitignore
+├── README.md
+│
+├── users
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── permissions.py
+│
+├── lms
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   ├── services.py
+│   ├── permissions.py
+│   ├── validators.py
+│   ├── tasks.py
+│   └── tests
+│
+└── config
+    ├── settings.py
+    ├── celery.py
+    └── urls.py
+```
+
+---
+
 # Дополнительные возможности
 
 * кастомная модель пользователя
@@ -819,7 +1061,7 @@ static_volume:/code/static
 * автоматическое заполнение owner
 * пагинация
 * YouTube validator
-* Swagger документация
+* Swagger / OpenAPI документация
 * Stripe API integration
 * сохранение платежных данных
 * автоматические тесты
@@ -831,7 +1073,11 @@ static_volume:/code/static
 * автоматическая блокировка неактивных пользователей
 * Docker Compose
 * PostgreSQL
-* Docker volumes для сохранения данных
+* Docker volumes
+* Gunicorn
+* Nginx reverse proxy
+* GitHub Actions CI/CD
+* автоматический деплой на сервер
 
 ---
 

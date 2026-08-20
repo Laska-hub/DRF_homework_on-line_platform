@@ -10,30 +10,14 @@ class Course(models.Model):
         blank=True,
     )
 
-    price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2
-    )
+    price = models.DecimalField(max_digits=10, decimal_places=2)
 
+    title = models.CharField(max_length=255)
 
-    title = models.CharField(
-        max_length=255
-    )
+    preview = models.ImageField(upload_to="course_previews/", blank=True, null=True)
 
-    preview = models.ImageField(
-        upload_to="course_previews/",
-        blank=True,
-        null=True
-    )
-
-    description = models.TextField(
-        blank=True,
-        null=True
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True
-    )
-
+    description = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.title
@@ -48,31 +32,15 @@ class Lesson(models.Model):
         blank=True,
     )
 
-    course = models.ForeignKey(
-        Course,
-        on_delete=models.CASCADE,
-        related_name="lessons"
-    )
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="lessons")
 
-    title = models.CharField(
-        max_length=255
-    )
+    title = models.CharField(max_length=255)
 
-    description = models.TextField(
-        blank=True,
-        null=True
-    )
+    description = models.TextField(blank=True, null=True)
 
-    preview = models.ImageField(
-        upload_to="lesson_previews/",
-        blank=True,
-        null=True
-    )
+    preview = models.ImageField(upload_to="lesson_previews/", blank=True, null=True)
 
-    video_url = models.URLField(
-        blank=True,
-        null=True
-    )
+    video_url = models.URLField(blank=True, null=True)
 
     def __str__(self):
         return self.title
@@ -80,15 +48,11 @@ class Lesson(models.Model):
 
 class Subscription(models.Model):
     user = models.ForeignKey(
-        "users.User",
-        on_delete=models.CASCADE,
-        related_name="subscriptions"
+        "users.User", on_delete=models.CASCADE, related_name="subscriptions"
     )
 
     course = models.ForeignKey(
-        Course,
-        on_delete=models.CASCADE,
-        related_name="subscriptions"
+        Course, on_delete=models.CASCADE, related_name="subscriptions"
     )
 
     class Meta:
@@ -116,21 +80,17 @@ class Payment(models.Model):
     ]
 
     user = models.ForeignKey(
-        "users.User",
-        on_delete=models.CASCADE,
-        related_name="payments"
+        "users.User", on_delete=models.CASCADE, related_name="payments"
     )
 
-    payment_date = models.DateTimeField(
-        auto_now_add=True
-    )
+    payment_date = models.DateTimeField(auto_now_add=True)
 
     paid_course = models.ForeignKey(
         Course,
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        related_name="payments"
+        related_name="payments",
     )
 
     paid_lesson = models.ForeignKey(
@@ -138,24 +98,17 @@ class Payment(models.Model):
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
-        related_name="payments"
+        related_name="payments",
     )
 
-    amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2
-    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
 
     payment_method = models.CharField(
         max_length=20,
         choices=PAYMENT_METHODS,
     )
 
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="created"
-    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="created")
 
     stripe_product_id = models.CharField(
         max_length=255,
@@ -176,6 +129,7 @@ class Payment(models.Model):
     )
 
     payment_link = models.URLField(
+        max_length=500,
         blank=True,
         null=True,
     )
